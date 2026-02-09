@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ book.title }} - 阅读{% endblock %}
+
+{% block head %}
+<style>
+    /* 让阅读器占据剩余的所有屏幕空间 */
+    body, html {
+        height: 100%;
+        overflow: hidden;
+    }
+    
+    /* 重置 base.html 中的容器样式 */
+    .container {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    .main-content {
+        padding: 0 !important;
+        height: calc(100vh - 60px); /* 减去顶部导航栏的大概高度 */
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* 如果你想让阅读器彻底全屏（不显示顶部导航），可以取消注释下面这段 */
+    /*
+    nav { display: none; }
+    .main-content { height: 100vh; }
+    */
+
+    iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+        display: block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <!-- 
+        核心逻辑：
+        使用 iframe 嵌入刚才部署在 static/pdfjs/web/viewer.html 的官方查看器。
+        通过 ?file= 参数告诉它去加载哪本书。
+    -->
+    <iframe 
+        id="pdf-viewer-frame"
+        src="{{ url_for('static', filename='pdfjs/web/viewer.html') }}?file={{ url_for('serve_book', filename=book.filename) }}" 
+        title="PDF Reader">
+    </iframe>
+
+    <script>
+        // 简单的错误提示，如果用户没有正确放置文件
+        const iframe = document.getElementById('pdf-viewer-frame');
+        iframe.onerror = function() {
+            alert("似乎没有找到 PDF.js Viewer 文件。\n请确保你已下载 pdfjs-dist 并将 web 和 build 文件夹放入 static/pdfjs/ 目录中。");
+        };
+        
+        // 可选：试图恢复阅读进度
+        // PDF.js 官方查看器有自己的 localStorage 机制，通常会自动记忆。
+        // 但由于它是 iframe，域名相同，它应该能正常工作。
+    </script>
+{% endblock %}

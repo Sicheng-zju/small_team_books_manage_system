@@ -1,0 +1,239 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ book.title }} - 阅读{% endblock %}
+
+{% block head %}
+<!-- 复用 epub.js 和 jszip (必须) -->
+<script src="{{ url_for('static', filename='js/jszip.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/epub.min.js') }}"></script>
+<style>
+    /* 统一使用 EPUB 阅读器的样式 */
+    body, html { height: 100%; margin: 0; overflow: hidden; }
+    
+    #viewer-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background: #fdfdfd;
+    }
+
+    #controls {
+        flex-shrink: 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 20px;
+        background: #f8f9fa;
+        border-bottom: 1px solid #ddd;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        z-index: 10;
+    }
+
+    #viewer {
+        flex-grow: 1;
+        width: 100%;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .book-title {
+        font-weight: bold;
+        color: #333;
+        max-width: 300px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .btn-group {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .loading-mask {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: white;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+        color: #666;
+    }
+    
+    /* 覆盖 epub.js 可能的默认 iframe 边框 */
+    #viewer iframe {
+        border: none !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="viewer-container">
+    <div id="controls">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <a href="{{ url_for('index') }}" class="btn" style="padding: 5px 10px;">&larr; 返回</a>
+            <span class="book-title">{{ book.title }}</span>
+        </div>
+        <div class="btn-group">
+            <button id="prev" class="btn">❮ 上一页</button>
+            <button id="next" class="btn">下一页 ❯</button>
+        </div>
+    </div>
+
+    <div id="viewer">
+        <div id="loading" class="loading-mask">
+            <div style="font-size: 2rem; margin-bottom: 1rem;">📖</div>
+            <div id="loading-text">正在处理文本...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const bookUrl = "{{ url_for('serve_book', filename=book.filename) }}";
+    const bookKey = "book_progress_epub_txt_{{ book.id }}";
+    const loadingText = document.getElementById('loading-text');
+    let rendition;
+
+    // 核心函数：将 TXT 转换为 EPUB Blob
+    async function convertTxtToEpub(url) {
+        loadingText.textContent = "正在下载书籍...";
+        const response = await fetch(url);
+        const text = await response.text();
+
+        loadingText.textContent = "正在构建电子书结构...";
+        
+        // 1. 初始化 ZIP
+        const zip = new JSZip();
+        zip.file("mimetype", "application/epub+zip");
+
+        // 2. META-INF
+        zip.folder("META-INF").file("container.xml", 
+            `<?xml version="1.0"?>
+            <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+                <rootfiles>
+                    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+                </rootfiles>
+            </container>`);
+
+        // 3. 处理文本内容 - 分章节优化性能
+        // 每 2000 行切分为一个 XHTML 文件，避免单个文件过大导致渲染卡顿
+        const lines = text.split(/\r?\n/);
+        const LINES_PER_CHAPTER = 2000;
+        const totalHeaders = [];
+        let chapterCount = 0;
+        
+        const oebps = zip.folder("OEBPS");
+
+        for (let i = 0; i < lines.length; i += LINES_PER_CHAPTER) {
+            const chunk = lines.slice(i, i + LINES_PER_CHAPTER);
+            // 简单的 HTML 转义和包装
+            const contentConfig = chunk.map(line => {
+                const safeLine = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                return line.trim().length > 0 ? `<p>${safeLine}</p>` : '<br/>';
+            }).join("");
+
+            chapterCount++;
+            const fileName = `chapter_${chapterCount}.xhtml`;
+            
+            const xhtml = `<?xml version="1.0" encoding="utf-8"?>
+                <html xmlns="http://www.w3.org/1999/xhtml">
+                <head>
+                    <title>Chapter ${chapterCount}</title>
+                    <style>
+                        body { font-family: "Microsoft YaHei", sans-serif; line-height: 1.8; padding: 20px; font-size: 1.1em; color: #333; }
+                        p { text-indent: 2em; margin-bottom: 0.5em; text-align: justify; }
+                    </style>
+                </head>
+                <body>
+                    ${contentConfig}
+                </body>
+                </html>`;
+            
+            oebps.file(fileName, xhtml);
+            totalHeaders.push({ id: `ch${chapterCount}`, href: fileName });
+        }
+
+        // 4. 生成 OPF (清单文件)
+        const manifestItems = totalHeaders.map(h => `<item id="${h.id}" href="${h.href}" media-type="application/xhtml+xml"/>`).join('\n');
+        const spineItems = totalHeaders.map(h => `<itemref idref="${h.id}"/>`).join('\n');
+
+        const opf = `<?xml version="1.0" encoding="utf-8"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
+            <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                <dc:title>{{ book.title }}</dc:title>
+                <dc:language>zh</dc:language>
+            </metadata>
+            <manifest>
+                ${manifestItems}
+                <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+            </manifest>
+            <spine toc="ncx">
+                ${spineItems}
+            </spine>
+            </package>`;
+
+        oebps.file("content.opf", opf);
+
+        // 5. 生成 NCX (导航文件 - 虽然我们这里只有一个平铺列表，但 epub 标准通常需要)
+        const navPoints = totalHeaders.map((h, index) => `
+            <navPoint id="${h.id}" playOrder="${index + 1}">
+                <navLabel><text>Section ${index + 1}</text></navLabel>
+                <content src="${h.href}"/>
+            </navPoint>`).join('\n');
+
+        oebps.file("toc.ncx", `<?xml version="1.0" encoding="UTF-8"?>
+            <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+            <head><meta name="dtb:uid" content="uid"/></head>
+            <docTitle><text>{{ book.title }}</text></docTitle>
+            <navMap>${navPoints}</navMap>
+            </ncx>`);
+
+        loadingText.textContent = "正在渲染...";
+        // Generate blob
+        return await zip.generateAsync({type: "blob"});
+    }
+
+    // 主流程
+    convertTxtToEpub(bookUrl).then(epubBlob => {
+        // 使用 epub.js 打开这个 Blob
+        const book = ePub(epubBlob);
+        
+        rendition = book.renderTo("viewer", {
+            width: "100%",
+            height: "100%",
+            flow: "paginated", // 强制分页模式
+            manager: "default"
+        });
+
+        // 这里的 display 是异步的
+        const savedLocation = localStorage.getItem(bookKey);
+        const displayPromise = savedLocation ? rendition.display(savedLocation) : rendition.display();
+
+        displayPromise.then(() => {
+            document.getElementById('loading').style.display = 'none';
+        });
+
+        // 监听位置变化保存进度
+        rendition.on("relocated", function(location) {
+            localStorage.setItem(bookKey, location.start.cfi);
+        });
+
+        // 绑定按钮
+        document.getElementById("next").addEventListener("click", () => rendition.next());
+        document.getElementById("prev").addEventListener("click", () => rendition.prev());
+
+        // 键盘控制
+        document.addEventListener("keyup", function(e) {
+            if ((e.keyCode || e.which) == 37) rendition.prev();
+            if ((e.keyCode || e.which) == 39) rendition.next();
+        });
+
+    }).catch(err => {
+        console.error(err);
+        loadingText.textContent = "加载失败: " + err.message;
+    });
+
+</script>
+{% endblock %}

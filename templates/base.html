@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}团队图书馆{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav>
+        <div class="container">
+            <a href="{{ url_for('index') }}" class="brand">📚 团队图书馆</a>
+            <div class="nav-links">
+                <form action="{{ url_for('index') }}" method="get" class="search-form">
+                    <input type="text" name="q" placeholder="搜索书籍..." value="{{ query if query else '' }}">
+                    <button type="submit">搜索</button>
+                </form>
+                {% if session.get('is_admin') %}
+                    <a href="{{ url_for('admin_dashboard') }}">管理后台</a>
+                    <a href="{{ url_for('logout') }}">退出登录</a>
+                {% else %}
+                    <a href="{{ url_for('login') }}">管理员登录</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+    <div class="container main-content">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <ul class="flashes">
+                {% for message in messages %}
+                    <li>{{ message }}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+    <footer>
+        <p>&copy; 2026 团队图书管理系统</p>
+    </footer>
+</body>
+</html>

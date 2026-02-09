@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>管理后台</h2>
+
+<div style="margin-bottom: 2rem; background: white; padding: 1.5rem; border-radius: 8px;">
+    <h3>上传新书</h3>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".pdf,.epub,.txt" required>
+        <button type="submit" class="btn">上传</button>
+        <div id="uploadStatus"></div>
+    </form>
+</div>
+
+<h3>书籍列表管理</h3>
+<div class="book-list">
+    {% for book in books %}
+    <div class="book-card" id="book-{{ book.id }}">
+        <div class="book-info">
+            <input type="text" value="{{ book.title }}" id="title-{{ book.id }}" style="padding: 0.2rem; margin-bottom: 0.5rem; width: 100%;">
+            <br>
+            <span class="badge">{{ book.filetype }}</span>
+            <small>{{ book.filename }}</small>
+        </div>
+        <div class="book-actions" style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <button onclick="renameBook({{ book.id }})" class="btn" style="background-color: #28a745;">保存书名</button>
+            <button onclick="deleteBook({{ book.id }})" class="btn" style="background-color: #dc3545;">删除</button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+document.getElementById('uploadForm').onsubmit = async function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const statusDiv = document.getElementById('uploadStatus');
+    statusDiv.textContent = '正在上传...';
+    
+    try {
+        const response = await fetch('{{ url_for("upload_book") }}', {
+            method: 'POST',
+            body: formData
+        });
+        const result = await response.json();
+        if (response.ok) {
+            statusDiv.textContent = '上传成功！刷新页面查看。';
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            statusDiv.textContent = '失败: ' + result.error;
+        }
+    } catch (err) {
+        statusDiv.textContent = '上传出错';
+    }
+};
+
+async function deleteBook(id) {
+    if (!confirm('确定要删除这本书吗？')) return;
+    
+    try {
+        const response = await fetch(`/admin/delete/${id}`, { method: 'POST' });
+        if (response.ok) {
+            document.getElementById(`book-${id}`).remove();
+        } else {
+            alert('删除失败');
+        }
+    } catch (err) {
+        alert('出错');
+    }
+}
+
+async function renameBook(id) {
+    const newTitle = document.getElementById(`title-${id}`).value;
+    const formData = new FormData();
+    formData.append('title', newTitle);
+    
+    try {
+        const response = await fetch(`/admin/rename/${id}`, {
+            method: 'POST',
+            body: formData
+        });
+        if (response.ok) {
+            alert('修改成功');
+        } else {
+            alert('修改失败');
+        }
+    } catch (err) {
+        alert('出错');
+    }
+}
+</script>
+{% endblock %}

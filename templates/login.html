@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="max-width: 400px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px;">
+    <h2>管理员登录</h2>
+    <form method="post">
+        <div style="margin-bottom: 1rem;">
+            <label for="password">密码</label>
+            <input type="password" name="password" required style="width: 100%; padding: 0.5rem; margin-top: 0.5rem;">
+        </div>
+        <button type="submit" class="btn" style="width: 100%;">登录</button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,19 @@
+# Python stuff
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Data
+library.db
+static/books/*
+!static/books/.gitkeep
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
