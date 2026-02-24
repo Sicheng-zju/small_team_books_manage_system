@@ -4,30 +4,52 @@
 <h2>管理后台</h2>
 
 <div style="margin-bottom: 2rem; background: white; padding: 1.5rem; border-radius: 8px;">
-    <h3>上传新书</h3>
+    <h3>上传新书（可批量）</h3>
     <form id="uploadForm" enctype="multipart/form-data">
-        <input type="file" name="file" accept=".pdf,.epub,.txt" required>
+        <input type="file" name="file" accept=".pdf,.epub,.txt" multiple required>
         <button type="submit" class="btn">上传</button>
         <div id="uploadStatus"></div>
     </form>
 </div>
 
-<h3>书籍列表管理</h3>
-<div class="book-grid">
-    {% for book in books %}
-    <div class="book-card" id="book-{{ book.id }}">
-        <div class="book-info">
-            <input type="text" value="{{ book.title }}" id="title-{{ book.id }}" style="padding: 0.2rem; margin-bottom: 0.5rem; width: 100%;">
-            <br>
-            <span class="badge">{{ book.filetype }}</span>
-            <small>{{ book.filename }}</small>
+<div class="admin-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h3>书籍列表管理</h3>
+    <form action="{{ url_for('admin_dashboard') }}" method="get" class="search-form">
+        <input type="text" name="q" placeholder="搜索管理书籍..." value="{{ query if query else '' }}">
+        <button type="submit">搜索</button>
+        {% if query %}
+            <a href="{{ url_for('admin_dashboard') }}" class="btn" style="background: #6c757d; margin-left: 0.5rem;">清除</a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="book-list">
+    {% if books %}
+        {% for book in books %}
+        <div class="book-item" id="book-{{ book.id }}">
+            <div class="book-icon">
+                {% if book.filetype == 'pdf' %}
+                    📄
+                {% elif book.filetype == 'epub' %}
+                    📖
+                {% else %}
+                    📝
+                {% endif %}
+            </div>
+            <div class="book-info" style="display: flex; align-items: center; gap: 1rem;">
+                <input type="text" value="{{ book.title }}" id="title-{{ book.id }}" style="padding: 0.4rem; width: 300px; border: 1px solid #ddd; border-radius: 4px;">
+                <small style="color: #666;">({{ book.filename }})</small>
+            </div>
+            <div class="book-actions" style="display: flex; gap: 0.5rem;">
+                <button onclick="renameBook({{ book.id }})" class="btn btn-sm" style="background-color: #28a745;">保存</button>
+                <button onclick="deleteBook({{ book.id }})" class="btn btn-sm" style="background-color: #dc3545;">删除</button>
+                <a href="{{ url_for('read_book', book_id=book.id) }}" class="btn btn-sm" target="_blank">查看</a>
+            </div>
         </div>
-        <div class="book-actions" style="display: flex; flex-direction: column; gap: 0.5rem;">
-            <button onclick="renameBook({{ book.id }})" class="btn" style="background-color: #28a745;">保存书名</button>
-            <button onclick="deleteBook({{ book.id }})" class="btn" style="background-color: #dc3545;">删除</button>
-        </div>
-    </div>
-    {% endfor %}
+        {% endfor %}
+    {% else %}
+        <p>没有找到相关书籍。</p>
+    {% endif %}
 </div>
 
 <script>
@@ -43,14 +65,19 @@ document.getElementById('uploadForm').onsubmit = async function(e) {
             body: formData
         });
         const result = await response.json();
+        
         if (response.ok) {
-            statusDiv.textContent = '上传成功！刷新页面查看。';
-            setTimeout(() => location.reload(), 1000);
+            // Success or partial success
+            statusDiv.className = "text-success"; // Assuming you might add bootstrap or just simple css
+            statusDiv.textContent = result.message || '上传成功！刷新页面查看。';
+            setTimeout(() => location.reload(), 2000);
         } else {
-            statusDiv.textContent = '失败: ' + result.error;
+            statusDiv.className = "text-danger";
+            statusDiv.textContent = '失败: ' + (result.error || result.message);
         }
     } catch (err) {
         statusDiv.textContent = '上传出错';
+        console.error(err);
     }
 };
 

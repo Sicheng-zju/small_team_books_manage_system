@@ -78,8 +78,14 @@ def logout():
 def admin_dashboard():
     if not session.get('is_admin'):
         return redirect(url_for('login'))
-    books = Book.query.all()
-    return render_template('admin.html', books=books)
+        
+    query = request.args.get('q')
+    if query:
+        books = Book.query.filter(Book.title.contains(query)).all()
+    else:
+        books = Book.query.all()
+        
+    return render_template('admin.html', books=books, query=query)
 
 @app.route('/admin/upload', methods=['POST'])
 def upload_book():
@@ -89,38 +95,54 @@ def upload_book():
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
     
-    file = request.files['file']
-    if file.filename == '':
+    files = request.files.getlist('file')
+    if not files or files[0].filename == '':
         return jsonify({'error': 'No selected file'}), 400
         
-    if file and allowed_file(file.filename):
-        # Use original filename as title (preserves Chinese/special chars)
-        title = file.filename.rsplit('.', 1)[0]
-        
-        # WE ARE TRUSTING THE USER'S FILENAME HERE TO KEEP CHINESE CHARACTERS
-        # BUT WE MUST STRIP PATHS TO PREVENT DIRECTORY TRAVERSAL
-        filename = os.path.basename(file.filename)
-        
-        # Fallback if somehow empty
-        if not filename:
-             import uuid
-             ext = file.filename.rsplit('.', 1)[1].lower()
-             filename = f"{uuid.uuid4().hex}.{ext}"
-
-        # Handle duplicates by renaming if necessary could be added here
-        # For now, simplistic overwrite check or unique constraint
-        if Book.query.filter_by(filename=filename).first():
-             return jsonify({'error': 'File with this name already exists'}), 400
-
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-        filetype = file.filename.rsplit('.', 1)[1].lower()
-        
-        new_book = Book(title=title, filename=filename, filetype=filetype)
-        db.session.add(new_book)
-        db.session.commit()
-        return jsonify({'success': True})
+    success_count = 0
+    errors = []
     
-    return jsonify({'error': 'Invalid file type'}), 400
+    for file in files:
+        if file and allowed_file(file.filename):
+            # Use original filename as title (preserves Chinese/special chars)
+            title = file.filename.rsplit('.', 1)[0]
+            
+            # WE ARE TRUSTING THE USER'S FILENAME HERE TO KEEP CHINESE CHARACTERS
+            # BUT WE MUST STRIP PATHS TO PREVENT DIRECTORY TRAVERSAL
+            filename = os.path.basename(file.filename)
+            
+            # Fallback if somehow empty
+            if not filename:
+                import uuid
+                ext = file.filename.rsplit('.', 1)[1].lower()
+                filename = f"{uuid.uuid4().hex}.{ext}"
+
+            # Check if book already exists in database (by filename or title)
+            # Here we check filename for duplicate file on disk conflict
+            # And title for logical duplicate
+            if Book.query.filter((Book.filename == filename) | (Book.title == title)).first():
+                errors.append(f"《{title}》 已经存在，跳过。")
+                continue
+
+            try:
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(file_path)
+                
+                filetype = file.filename.rsplit('.', 1)[1].lower()
+                new_book = Book(title=title, filename=filename, filetype=filetype)
+                db.session.add(new_book)
+                success_count += 1
+            except Exception as e:
+                errors.append(f"上传 《{title}》 失败: {str(e)}")
+    
+    if success_count > 0:
+        db.session.commit()
+        msg = f"成功上传 {success_count} 本书。"
+        if errors:
+            msg += " " + " ".join(errors)
+        return jsonify({'success': True, 'message': msg})
+    else:
+        return jsonify({'error': " ".join(errors) if errors else "没有有效的文件被上传。"}), 400
 
 @app.route('/admin/delete/<int:book_id>', methods=['POST'])
 def delete_book(book_id):
