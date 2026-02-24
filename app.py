@@ -48,11 +48,15 @@ with app.app_context():
 @app.route('/')
 def index():
     query = request.args.get('q')
+    page = request.args.get('page', 1, type=int)
+    per_page = 20  # Show 20 books per page
+
     if query:
-        books = Book.query.filter(Book.title.contains(query)).all()
+        books_pagination = Book.query.filter(Book.title.contains(query)).paginate(page=page, per_page=per_page, error_out=False)
     else:
-        books = Book.query.all()
-    return render_template('index.html', books=books, query=query)
+        books_pagination = Book.query.paginate(page=page, per_page=per_page, error_out=False)
+    
+    return render_template('index.html', books=books_pagination, query=query)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
