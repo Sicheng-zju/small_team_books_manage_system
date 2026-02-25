@@ -35,7 +35,22 @@
         {% else %}
             <span class="page-link disabled">下一页 &raquo;</span>
         {% endif %}
+
+        <div class="jump-page" style="margin-left: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+            <input type="number" id="jumpPageInput" min="1" max="{{ books.pages }}" placeholder="页码" style="width: 60px; padding: 0.4rem; border: 1px solid #ddd; border-radius: 4px;">
+            <button onclick="jumpToPage('{{ url_for('index', q=query) }}')" class="btn btn-sm">跳转</button>
+        </div>
     </div>
+    <script>
+        function jumpToPage(baseUrl) {
+            const page = document.getElementById('jumpPageInput').value;
+            if (page) {
+                // 如果 baseUrl 中已经包含查询参数 (如 ?q=test)，用 & 连接；否则用 ?
+                const separator = baseUrl.includes('?') ? '&' : '?';
+                window.location.href = `${baseUrl}${separator}page=${page}`;
+            }
+        }
+    </script>
     {% endif %}
 </div>
 {% endblock %}

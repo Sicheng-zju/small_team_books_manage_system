@@ -80,12 +80,15 @@ def admin_dashboard():
         return redirect(url_for('login'))
         
     query = request.args.get('q')
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    
     if query:
-        books = Book.query.filter(Book.title.contains(query)).all()
+        books_pagination = Book.query.filter(Book.title.contains(query)).paginate(page=page, per_page=per_page, error_out=False)
     else:
-        books = Book.query.all()
+        books_pagination = Book.query.paginate(page=page, per_page=per_page, error_out=False)
         
-    return render_template('admin.html', books=books, query=query)
+    return render_template('admin.html', books=books_pagination, query=query)
 
 @app.route('/admin/upload', methods=['POST'])
 def upload_book():

@@ -24,8 +24,8 @@
 </div>
 
 <div class="book-list">
-    {% if books %}
-        {% for book in books %}
+    {% if books.items %}
+        {% for book in books.items %}
         <div class="book-item" id="book-{{ book.id }}">
             <div class="book-icon">
                 {% if book.filetype == 'pdf' %}
@@ -52,7 +52,40 @@
     {% endif %}
 </div>
 
+<!-- Admin Pagination -->
+{% if books.pages > 1 %}
+<div class="pagination" style="margin-top: 2rem;">
+    {% if books.has_prev %}
+        <a href="{{ url_for('admin_dashboard', page=books.prev_num, q=query) }}" class="page-link">&laquo; 上一页</a>
+    {% else %}
+        <span class="page-link disabled">&laquo; 上一页</span>
+    {% endif %}
+
+    <span class="current-page">第 {{ books.page }} 页 / 共 {{ books.pages }} 页</span>
+
+    {% if books.has_next %}
+        <a href="{{ url_for('admin_dashboard', page=books.next_num, q=query) }}" class="page-link">下一页 &raquo;</a>
+    {% else %}
+        <span class="page-link disabled">下一页 &raquo;</span>
+    {% endif %}
+
+    <div class="jump-page" style="margin-left: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+        <input type="number" id="jumpPageInput" min="1" max="{{ books.pages }}" placeholder="页码" style="width: 60px; padding: 0.4rem;">
+        <button onclick="jumpToPage('{{ url_for('admin_dashboard', q=query) }}')" class="btn btn-sm">跳转</button>
+    </div>
+</div>
+{% endif %}
+
 <script>
+function jumpToPage(baseUrl) {
+    const page = document.getElementById('jumpPageInput').value;
+    if (page) {
+        // Handle query parameters properly
+        const separator = baseUrl.includes('?') ? '&' : '?';
+        window.location.href = `${baseUrl}${separator}page=${page}`;
+    }
+}
+
 document.getElementById('uploadForm').onsubmit = async function(e) {
     e.preventDefault();
     const formData = new FormData(this);
