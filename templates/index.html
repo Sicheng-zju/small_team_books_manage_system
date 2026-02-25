@@ -6,23 +6,11 @@
         {% if books.items %}
             {% for book in books.items %}
             <div class="book-item">
-                <div class="book-icon">
-                    {% if book.filetype == 'pdf' %}
-                        📄 PDF
-                    {% elif book.filetype == 'epub' %}
-                        📖 EPUB
-                    {% else %}
-                        📝 TXT
-                    {% endif %}
-                </div>
                 <div class="book-info">
                     <h3><a href="{{ url_for('read_book', book_id=book.id) }}">{{ book.title }}</a></h3>
                 </div>
                 <div class="book-meta">
                      <span class="badge">{{ book.filetype }}</span>
-                </div>
-                <div class="book-actions">
-                    <a href="{{ url_for('read_book', book_id=book.id) }}" class="btn btn-sm">阅读</a>
                 </div>
             </div>
             {% endfor %}
